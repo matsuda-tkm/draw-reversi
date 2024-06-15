@@ -1,0 +1,18 @@
+# venv
+.venv/
+
+# cache
+__pycache__/
+
+# wandb
+wandb/
+
+# data
+data/
+checkpoints/
+
+# log
+nohup.out
+
+# secrets
+.env

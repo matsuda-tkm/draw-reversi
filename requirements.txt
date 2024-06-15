@@ -1,0 +1,6 @@
+creversi==0.0.1
+numpy==1.19.0
+wandb==0.17.1
+tqdm==4.66.4
+python-dotenv==1.0.1
+loguru==0.7.2
