@@ -1,16 +1,16 @@
-from dotenv import load_dotenv
-
-from loguru import logger
-import numpy as np
 from pathlib import Path
+
+import numpy as np
 import torch
+from dotenv import load_dotenv
+from loguru import logger
 from torch import nn
 from torch.utils.data import DataLoader
-import wandb
 
-from src.train.model import ValueNetwork
-from src.train.dataset import ScriptDataset
+import wandb
 from src.train.config import config
+from src.train.dataset import ScriptDataset
+from src.train.model import ResidualValueNetwork
 
 assert torch.cuda.is_available(), "CUDA is not available"
 load_dotenv()
@@ -21,9 +21,9 @@ class Trainer:
         self.config = config
 
     def set_model(self):
-        self.model = ValueNetwork(
+        self.model = ResidualValueNetwork(
             hidden_channels=self.config["hidden_channels"],
-            conv_layers=self.config["conv_layers"]
+            conv_layers=self.config["conv_layers"],
         )
         self.model = nn.DataParallel(self.model)
         self.model.to("cuda")
@@ -31,19 +31,21 @@ class Trainer:
     def set_optimizer(self):
         if self.config["optimizer"] == "Adam":
             self.optimizer = torch.optim.Adam(
-                self.model.parameters(),
-                lr=self.config["lr"]
+                self.model.parameters(), lr=self.config["lr"]
+            )
+        elif self.config["optimizer"] == "AdamW":
+            self.optimizer = torch.optim.AdamW(
+                self.model.parameters(), lr=self.config["lr"]
             )
         else:
             raise ValueError(f"Invalid optimizer: {self.config['optimizer']}")
 
     def set_scheduler(self):
-        if self.config["scheduler"] == "None":
+        if self.config["scheduler"] is None:
             pass
         elif self.config["scheduler"] == "ExponentialLR":
             self.scheduler = torch.optim.lr_scheduler.ExponentialLR(
-                self.optimizer,
-                gamma=self.config["gamma"]
+                self.optimizer, gamma=self.config["gamma"]
             )
         else:
             raise ValueError(f"Invalid scheduler: {self.config['scheduler']}")
@@ -54,18 +56,20 @@ class Trainer:
         else:
             raise ValueError(f"Invalid criterion: {self.config['criterion']}")
 
-    def make_dataloader(self, X: np.ndarray, y: np.ndarray, shuffle: bool) -> DataLoader:
+    def make_dataloader(
+        self, X: np.ndarray, y: np.ndarray, shuffle: bool
+    ) -> DataLoader:
         dataloader = DataLoader(
-            ScriptDataset(X, y),
-            batch_size=self.config["batch_size"],
-            shuffle=shuffle
+            ScriptDataset(X, y), batch_size=self.config["batch_size"], shuffle=shuffle
         )
         return dataloader
 
     def seed_everything(self) -> None:
-        import random
         import os
+        import random
+
         import numpy as np
+
         seed = self.config["seed"]
         random.seed(seed)
         os.environ["PYTHONHASHSEED"] = str(seed)
@@ -87,7 +91,7 @@ class Trainer:
                 self.optimizer.step()
                 train_loss += loss.item()
                 n += 1
-            if self.config["scheduler"] != "None":
+            if self.config["scheduler"] is not None:
                 self.scheduler.step()
             train_loss /= n
             self.model.eval()
@@ -101,13 +105,17 @@ class Trainer:
             eval_loss /= m
             self.model.train()
             if wandb.run is not None:
-                wandb.log({
-                    "epoch": epoch,
-                    "train_loss": train_loss,
-                    "eval_loss": eval_loss,
-                    "learning rate": self.optimizer.param_groups[0]["lr"]
-                })
-            logger.info(f"epoch: {epoch}, train loss: {train_loss}, eval loss: {eval_loss}")
+                wandb.log(
+                    {
+                        "epoch": epoch,
+                        "train_loss": train_loss,
+                        "eval_loss": eval_loss,
+                        "learning rate": self.optimizer.param_groups[0]["lr"],
+                    }
+                )
+            logger.info(
+                f"epoch: {epoch}, train loss: {train_loss}, eval loss: {eval_loss}"
+            )
 
     def save_model(self, path: Path) -> None:
         if not path.parent.exists():
@@ -128,8 +136,8 @@ class Trainer:
 
 
 if __name__ == "__main__":
-    from src.train.dataset_path import egaroucid_dir
     from src.train.dataset import load_data
+    from src.train.dataset_path import egaroucid_dir
     from src.utils.boards import BoardCoverter
 
     logger.info("Start running")
@@ -144,7 +152,7 @@ if __name__ == "__main__":
     else:
         board_converter = BoardCoverter().to_numpy
     generator = sorted(egaroucid_dir.iterdir())
-    for i, path_to_script in enumerate(generator[:trainer.config["n_data"] + 1]):
+    for i, path_to_script in enumerate(generator[: trainer.config["n_data"] + 1]):
         if i == 0:
             x, y = load_data(str(path_to_script), board_converter)
             eval_dataloader = trainer.make_dataloader(x, y, shuffle=False)
@@ -155,7 +163,9 @@ if __name__ == "__main__":
         logger.debug(x.shape)
         train_dataloader = trainer.make_dataloader(x, y, shuffle=True)
         if i == 1:
-            trainer.start_wandb("10epoch, Augmented, 0.01, 8192, h=4, l=2")
+            trainer.start_wandb(
+                "10epoch/data, 20data, Augmented, 0.01, 8192, h=8, l=5, fc=128, Residual"
+            )
             pass
         trainer.train(train_dataloader, eval_dataloader)
         trainer.save_model(Path(f"checkpoints/checkpoint_{i:03}.pth"))
