@@ -1,9 +1,9 @@
 config = {
     "hidden_channels": 8,
-    "conv_layers": 5,
+    "conv_layers": 7,
     "optimizer": "AdamW",
     "lr": 0.01,
-    "scheduler": None,
+    "scheduler": "ExponentialLR",
     "gamma": 0.97,
     "criterion": "HuberLoss",
     "batch_size": 8192,
