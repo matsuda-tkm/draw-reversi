@@ -80,8 +80,8 @@ class Trainer:
 
     def train(self, train_dataloader: DataLoader, eval_dataloader: DataLoader) -> None:
         for epoch in range(config["n_epoch"]):
-            train_loss = 0
-            eval_loss, n = 0, 0
+            train_loss, n = 0, 0
+            eval_loss, m = 0, 0
             for X, y in train_dataloader:
                 X, y = X.to("cuda"), y.to("cuda")
                 self.optimizer.zero_grad()
@@ -89,10 +89,11 @@ class Trainer:
                 loss = self.criterion(output, y)
                 loss.backward()
                 self.optimizer.step()
-                if wandb.run is not None:
-                    wandb.log({"train_loss": loss.item()})
+                train_loss += loss.item()
+                n += 1
             if self.config["scheduler"] is not None:
                 self.scheduler.step()
+            train_loss /= n
             self.model.eval()
             for X, y in eval_dataloader:
                 X, y = X.to("cuda"), y.to("cuda")
@@ -100,13 +101,14 @@ class Trainer:
                     output = self.model(X)
                 loss = self.criterion(output, y)
                 eval_loss += loss.item()
-                n += 1
-            eval_loss /= n
+                m += 1
+            eval_loss /= m
             self.model.train()
             if wandb.run is not None:
                 wandb.log(
                     {
                         "epoch": epoch,
+                        "train_loss": train_loss,
                         "eval_loss": eval_loss,
                         "learning rate": self.optimizer.param_groups[0]["lr"],
                     }
@@ -162,7 +164,7 @@ if __name__ == "__main__":
         train_dataloader = trainer.make_dataloader(x, y, shuffle=True)
         if i == 1:
             trainer.start_wandb(
-                "10epoch/data, 20data, Augmented, 0.01, 8192, h=8, l=7, fc=128, Residual"
+                "10epoch/data, 20data, Augmented, 0.01, 8192, h=8, l=5, fc=128, Residual"
             )
             pass
         trainer.train(train_dataloader, eval_dataloader)

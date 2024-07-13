@@ -1,8 +1,7 @@
 import copy
-
 import creversi
-import numpy as np
 import torch
+import numpy as np
 
 
 class BoardCoverter:
@@ -22,15 +21,12 @@ class BoardCoverter:
     def to_numpy(self, board_obj: creversi.Board) -> np.ndarray:
         board = np.zeros((8, 8, 8), dtype=np.float32)
         board_obj.piece_planes(board)
-
         # 白番の場合
         if not board_obj.turn:
             board = board[[1, 0, 2, 3, 4, 5, 6, 7], :, :]
             board[7] = 1
-
         # 空白の位置
         board[2] = np.where(board[0] + board[1] == 1, 0, 1)
-
         # 合法手の位置, 返せる石の個数
         legal_moves = list(board_obj.legal_moves)
         if legal_moves != [64]:
@@ -46,24 +42,15 @@ class BoardCoverter:
             tmp = tmp.reshape(8, 8)
             board[3] = np.where(tmp > 0, 1, 0)
             board[4] = tmp
-
         # 隅,X,Cの位置
         board[5] = np.array(
-            [
-                1., 1., 0., 0., 0., 0., 1., 1.,
-                1., 1., 0., 0., 0., 0., 1., 1.,
-                0., 0., 0., 0., 0., 0., 0., 0.,
-                0., 0., 0., 0., 0., 0., 0., 0.,
-                0., 0., 0., 0., 0., 0., 0., 0.,
-                0., 0., 0., 0., 0., 0., 0., 0.,
-                1., 1., 0., 0., 0., 0., 1., 1.,
-                1., 1., 0., 0., 0., 0., 1., 1.
-            ]
+            [1., 1., 0., 0., 0., 0., 1., 1., 1., 1., 0., 0., 0., 0., 1., 1.,
+             0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
+             0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
+             1., 1., 0., 0., 0., 0., 1., 1., 1., 1., 0., 0., 0., 0., 1., 1.]
         ).reshape(8, 8)
-
         # 1埋め
         board[6] = 1
-
         return board
 
     def to_torch(self, board_obj: creversi.Board) -> torch.Tensor:
